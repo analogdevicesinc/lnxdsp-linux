@@ -33,7 +33,6 @@
 		ethernet0 = &emac0;
 		ethernet1 = &emac1;
 		spi0   = &spi0;
-		spi1   = &spi1;
 		spi2   = &spi2;
 		can0 = &can0;
 		can1 = &can1;
@@ -73,6 +72,7 @@
 	L2: cache-controller@10000000 {
 		compatible = "arm,pl310-cache";
 		reg = <0x10000000 0x1000>;
+		cache-unified;
 		cache-level = <2>;
 	};
 
@@ -283,17 +283,6 @@
 			interrupts = <GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH>;
 			num-cs = <128>;
 			dma-channel = <22>, <23>;
-			status = "disabled";
-		};
-
-		spi1: spi@0x31043000 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			compatible = "adi,spi3";
-			reg = <0x31043000 0xFF>;
-			interrupts = <GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH>;
-			num-cs = <128>;
-			dma-channel = <24>, <25>;
 			status = "disabled";
 		};
 

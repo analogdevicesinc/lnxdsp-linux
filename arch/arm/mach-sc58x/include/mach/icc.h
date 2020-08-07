@@ -57,5 +57,6 @@ void platform_clear_ipi(unsigned int cpu, int irq);
 int platform_res_manage_request_irq(uint16_t subid, unsigned int cpu);
 void platform_res_manage_free_irq(uint16_t subid);
 void platform_ipi_init(void);
+void platform_send_ipi_sharc0(void);
 
 #endif

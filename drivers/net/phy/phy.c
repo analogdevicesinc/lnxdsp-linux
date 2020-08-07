@@ -647,7 +647,7 @@ EXPORT_SYMBOL_GPL(phy_speed_up);
  */
 void phy_start_machine(struct phy_device *phydev)
 {
-	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue, HZ);
+	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue, 0 * HZ);
 }
 EXPORT_SYMBOL_GPL(phy_start_machine);
 
