@@ -1,4 +1,3 @@
-obj-$(CONFIG_ICC) := icc.o
 PWD := core/
 
 icc-$(CONFIG_CORE_CONTROL) := $(PWD)core_control.o

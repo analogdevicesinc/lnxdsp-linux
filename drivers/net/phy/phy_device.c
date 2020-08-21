@@ -430,7 +430,7 @@ struct phy_device *phy_device_create(struct mii_bus *bus, int addr, int phy_id,
 	dev->link = 0;
 	dev->interface = PHY_INTERFACE_MODE_GMII;
 
-	dev->autoneg = AUTONEG_ENABLE;
+	dev->autoneg = AUTONEG_DISABLE;
 
 	dev->is_c45 = is_c45;
 	dev->phy_id = phy_id;

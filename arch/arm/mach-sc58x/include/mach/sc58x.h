@@ -144,7 +144,9 @@
 /* =========================
         TRU0
    ========================= */
+#define REG_TRU0_SSR86                  0x3108A158         /* TRU0 Slave Select Register */
 #define REG_TRU0_SSR87                  0x3108A15C         /* TRU0 Slave Select Register */
+#define REG_TRU0_SSR90                  0x3108A168         /* TRU0 Slave Select Register */
 #define REG_TRU0_SSR91                  0x3108A16C         /* TRU0 Slave Select Register */
 #define REG_TRU0_SSR95                  0x3108A17C         /* TRU0 Slave Select Register */
 #define REG_TRU0_MTR                    0x3108A7E0         /* TRU0 Master Trigger Register */
@@ -153,6 +155,9 @@
 /* ===================================
        Trigger Master Definitions
    =================================== */
+#define TRGM_SOFT0                            93           /* Software-driven Trigger 0 */
+#define TRGM_SOFT1                            94           /* Software-driven Trigger 1 */
+#define TRGM_SOFT2                            95           /* Software-driven Trigger 2 */
 #define TRGM_SOFT3                            96           /* Software-driven Trigger 3 */
 #define TRGM_SOFT4                            97           /* Software-driven Trigger 4 */
 #define TRGM_SOFT5                            98           /* Software-driven Trigger 5 */

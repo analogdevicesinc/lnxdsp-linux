@@ -42,8 +42,15 @@ void platform_res_manage_free_irq(uint16_t subid)
 {
 }
 
+void platform_send_ipi_sharc0(void)
+{
+	writel(TRGM_SOFT1, __io_address(REG_TRU0_MTR));
+}
+
 void platform_ipi_init(void)
 {
+	writel(TRGM_SOFT0, __io_address(REG_TRU0_SSR86));
+	writel(TRGM_SOFT1, __io_address(REG_TRU0_SSR90));
 	writel(TRGM_SOFT3, __io_address(REG_TRU0_SSR87));
 	writel(TRGM_SOFT4, __io_address(REG_TRU0_SSR91));
 	writel(TRGM_SOFT5, __io_address(REG_TRU0_SSR95));

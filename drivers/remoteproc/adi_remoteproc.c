@@ -19,6 +19,9 @@
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
+#include <linux/slab.h>
+#include <linux/kobject.h>
+#include <linux/gpio.h>
 #include <linux/platform_device.h>
 #include <linux/remoteproc.h>
 #include <linux/delay.h>
@@ -26,7 +29,9 @@
 #include <mach/hardware.h>
 #include <mach/sec.h>
 #include <mach/dma.h>
+#include <mach/sc58x.h>
 #include <mach/icc.h>
+#include <mach/gpio.h>
 #include "remoteproc_internal.h"
 
 /* The VERIFY_LDR_DATA macro is used to verify LDR data loaded to
@@ -63,6 +68,7 @@
 struct adi_rproc_data {
 	struct device *dev;
 	struct rproc *rproc;
+	struct kobject *kobj;
 	const char *firmware_name;
 	int core_id;
 	int core_irq;
@@ -97,6 +103,53 @@ typedef struct ldr_hdr {
 	uint32_t byte_count;
 	uint32_t argument;
 } LDR_Ehdr_t;
+
+static irqreturn_t sharc_irq_handler(int irq, void *priv)
+{
+	static int irq_count = 0;
+
+	irq_count++;
+	/* For the 4th IRQ Message we should toggle LED12 on the SAM board */
+	if (irq_count == 4) {
+		int led_gpio = gpio_request(GPIO_PD3, "LED12");
+		if (led_gpio != 0)
+			printk(KERN_ERR "Failed to open LED12 gpio\n");
+		else {
+			int res = gpio_direction_input(led_gpio);
+			if (res != 0)
+				printk(KERN_ERR "Failed to set direction on LED12 gpio\n");
+			else {
+				// Check the LED is already high from the eth message
+				int led_state = gpio_get_value(GPIO_PD3);
+				if (led_state == 1)
+					// led is high, unexpected
+					printk(KERN_ERR "LED gpio is unexpectedly high.\n");
+				else
+					// LED is low as expected, set it high
+					gpio_direction_output(GPIO_PD3, 1);
+			}
+			gpio_free(GPIO_PD3);
+		}
+	}
+	// printk(KERN_ERR "Receive irq from Sharc Core 1\n");
+	return IRQ_HANDLED;
+}
+
+static ssize_t att_store(struct device *dev, struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	return count;
+}
+
+static ssize_t att_show(struct device *dev, struct device_attribute *attr,
+				char *buf)
+{
+	printk("Sending the gong playback notification to Sharc\n");
+	platform_send_ipi_sharc0();
+	return 0;
+}
+
+static DEVICE_ATTR(test, 0644, att_show, NULL);
 
 static int adi_core_set_svect(struct adi_rproc_data *rproc_data,
 					unsigned long svect)
@@ -461,6 +514,7 @@ static int adi_remoteproc_probe(struct platform_device *pdev)
 	struct rproc *rproc;
 	struct resource *res;
 	int ret;
+	int irq;
 	const char *name;
 
 	ret = of_property_read_string(np, "firmware-name",
@@ -507,6 +561,19 @@ static int adi_remoteproc_probe(struct platform_device *pdev)
 		goto free_rproc;
 	}
 
+	irq = platform_get_irq(pdev, 0);
+	if (irq <= 0) {
+		dev_err(dev, "No irq specified\n");
+		return -ENOENT;
+	}
+
+	ret = devm_request_irq(dev, irq, sharc_irq_handler,
+					IRQF_SHARED, "sharc", rproc_data);
+	if (ret) {
+		dev_err(dev, "Failed to register irq %d, ret:%d\n", irq, ret);
+		return -ENOENT;
+	}
+
 	rproc_data->dev = &pdev->dev;
 	rproc_data->rproc = rproc;
 	rproc_data->firmware_name = name;
@@ -517,6 +584,20 @@ static int adi_remoteproc_probe(struct platform_device *pdev)
 	ret = rproc_add(rproc);
 	if (ret) {
 		dev_err(dev, "Failed to add rproc\n");
+		goto free_rproc;
+	}
+
+	rproc_data->kobj = kobject_create_and_add("remotekobj", NULL);
+	if (rproc_data->kobj == NULL) {
+		ret = -ENOMEM;
+		rproc_del(rproc_data->rproc);
+		goto free_rproc;
+	}
+
+	ret = sysfs_create_file(rproc_data->kobj, &dev_attr_test.attr);
+	if (ret < 0) {
+		kobject_del(rproc_data->kobj);
+		rproc_del(rproc_data->rproc);
 		goto free_rproc;
 	}
 
@@ -532,6 +613,7 @@ static int adi_remoteproc_remove(struct platform_device *pdev)
 {
 	struct adi_rproc_data *rproc_data = platform_get_drvdata(pdev);
 
+	kobject_del(rproc_data->kobj);
 	rproc_del(rproc_data->rproc);
 	rproc_free(rproc_data->rproc);
 
@@ -557,8 +639,8 @@ static int __init adi_remoteproc_init(void)
 {
 	return platform_driver_register(&adi_rproc_driver);
 }
-
 late_initcall_sync(adi_remoteproc_init);
+
 MODULE_DESCRIPTION("Analog Device sc5xx SHARC Image Loader");
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Greg Chen <jian.chen@analog.com>");
