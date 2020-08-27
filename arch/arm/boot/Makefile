@@ -66,6 +66,9 @@ $(obj)/compressed/vmlinux: $(obj)/Image FORCE
 $(obj)/zImage:	$(obj)/compressed/vmlinux FORCE
 	$(call if_changed,objcopy)
 
+$(obj)/Image-dtb.%:	$(obj)/dts/%.dtb $(obj)/Image
+	cat $(obj)/Image $< > $@
+
 endif
 
 ifneq ($(LOADADDR),)
@@ -86,7 +89,11 @@ if [ $(words $(UIMAGE_LOADADDR)) -ne 1 ]; then \
 	false; \
 fi
 
-$(obj)/uImage:	$(obj)/zImage FORCE
+$(obj)/uImage:	$(obj)/Image FORCE
+	@$(check_for_multiple_loadaddr)
+	$(call if_changed,uimage)
+
+$(obj)/uImage-dtb.%: $(obj)/Image-dtb.% FORCE
 	@$(check_for_multiple_loadaddr)
 	$(call if_changed,uimage)
 
@@ -96,7 +103,7 @@ $(obj)/bootp/bootp: $(obj)/zImage initrd FORCE
 $(obj)/bootpImage: $(obj)/bootp/bootp FORCE
 	$(call if_changed,objcopy)
 
-PHONY += initrd install zinstall uinstall
+PHONY += initrd FORCE
 initrd:
 	@test "$(INITRD_PHYS)" != "" || \
 	(echo This machine does not support INITRD; exit -1)
