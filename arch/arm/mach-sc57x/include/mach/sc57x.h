@@ -57,7 +57,7 @@
 /* =========================
         WDOG1
    ========================= */
-#define REG_WDOG1_CTL               0x31009000         /* WDOG1 Control Register */
+#define REG_WDOG1_CTL               0x31008800         /* WDOG1 Control Register */
 
 /*  =========================
  *         CRC0 MMR
@@ -145,9 +145,9 @@
 /* =========================
         TRU0
    ========================= */
-#define REG_TRU0_SSR71                  0x3108A118         /* TRU0 Slave Select Register */
-#define REG_TRU0_SSR75                  0x3108A128         /* TRU0 Slave Select Register */
-#define REG_TRU0_SSR79                  0x3108A138         /* TRU0 Slave Select Register */
+#define REG_TRU0_SSR71                  0x3108A11C         /* TRU0 Slave Select Register */
+#define REG_TRU0_SSR75                  0x3108A12C         /* TRU0 Slave Select Register */
+#define REG_TRU0_SSR79                  0x3108A13C         /* TRU0 Slave Select Register */
 #define REG_TRU0_MTR                    0x3108A7E0         /* TRU0 Master Trigger Register */
 #define REG_TRU0_GCTL                   0x3108A7F4         /* TRU0 Global Control Register */
 
