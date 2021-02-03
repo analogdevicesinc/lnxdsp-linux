@@ -154,9 +154,9 @@
 /* ===================================
        Trigger Master Definitions
    =================================== */
-#define TRGM_SOFT0                            70           /* Software-driven Trigger 0 */
-#define TRGM_SOFT1                            71           /* Software-driven Trigger 1 */
-#define TRGM_SOFT2                            72           /* Software-driven Trigger 2 */
+#define TRGM_SOFT3                            70           /* Software-driven Trigger 3 */
+#define TRGM_SOFT4                            71           /* Software-driven Trigger 4 */
+#define TRGM_SOFT5                            72           /* Software-driven Trigger 5 */
 
 /* =========================
         RCU0
