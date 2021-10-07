@@ -1,10 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Device tree for ADI sc594-som-ezkit board
- *
  * Copyright 2014 - 2020 Analog Devices Inc.
- *
- * Licensed under the GPL-2 or later.
- *
  */
 
 /dts-v1/;
@@ -31,7 +28,7 @@
 			            <&ssw0 1 GPIO_ACTIVE_LOW>,	 /* LED */
 			            <&ssw0 2 GPIO_ACTIVE_LOW>,	 /* LED */
 			            <&ssw0 3 GPIO_ACTIVE_HIGH>,	 /* SPI2FLASH_CS */
-			            <&ssw0 4 GPIO_ACTIVE_LOW>,	 /* SPI2D2_D3_EN */
+			            <&ssw0 4 GPIO_ACTIVE_HIGH>,	 /* SPI2D2_D3_EN */
 			            <&ssw0 5 GPIO_ACTIVE_LOW>,	 /* UART0_EN */
 			            <&ssw0 6 GPIO_ACTIVE_LOW>,	 /* UART0_FLOW_EN */
 			            <&ssw0 7 GPIO_ACTIVE_HIGH>,	 /* OSPIFLASH_CS */
@@ -41,7 +38,7 @@
 			            <&ssw1 5 GPIO_ACTIVE_LOW>,	 /* ADAU_RESET */
 			            <&ssw1 6 GPIO_ACTIVE_HIGH>,	 /* ADAU1962_EN */
 			            <&ssw1 7 GPIO_ACTIVE_HIGH>,	 /* ADAU1979_EN */
-			            <&ssw1 8 GPIO_ACTIVE_LOW>,	 /* OCTAL_SPI_CS_EN */
+			            <&ssw1 8 GPIO_ACTIVE_HIGH>,	 /* OCTAL_SPI_CS_EN */
 			            <&ssw1 9 GPIO_ACTIVE_LOW>,	 /* SPDIF_DIGITAL_EN */
 			            <&ssw1 10 GPIO_ACTIVE_LOW>,	 /* SPDIF_OPTICAL_EN */
 			            <&ssw1 11 GPIO_ACTIVE_LOW>,	 /* AUDIO_JACK_SEL */
@@ -205,20 +202,44 @@
 		spi-cpha;
 		spi-rx-bus-width = <4>;
 
-		partition@0 {
-			label = "unallocated (is25lp512)";
-			reg = <0x0 0x2000000>;
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			spi_0: partition@0 {
+				label = "U-Boot";
+				reg = <0x0 0x80000>;
+			};
+
+			spi_1: partition@1 {
+				label = "U-Boot Environment";
+				reg = <0x80000 0x20000>;
+			};
+
+			spi_2: partition@2 {
+				label = "Device Tree Blob";
+				reg = <0xA0000 0x20000>;
+			};
+
+			spi_3: partition@3 {
+				label = "Kernel zImage";
+				reg = <0xC0000 0x600000>;
+			};
+
+			spi_4: partition@4 {
+				label = "JFFS2 Formatted RFS";
+				reg = <0x6C0000 0x3940000>;
+			};
 		};
-
 	};
-
 };
 
 &ospi {
 	pinctrl-names = "default";
 	pinctrl-0 = <&ospi_default>;
 
-	status = "okay";
+	status = "disabled";
 
 	flash0: is25lx256@0 {
 		#address-cells = <1>;
@@ -237,35 +258,9 @@
 		cdns,tchsh-ns = <4>;
 		cdns,tslch-ns = <4>;
 
-		partitions {
-			compatible = "fixed-partitions";
-			#address-cells = <1>;
-			#size-cells = <1>;
-
-			ospi_0: partition@0 {
-				label = "U-Boot";
-				reg = <0x0 0x80000>;
-			};
-
-			ospi_1: partition@1 {
-				label = "U-Boot Environment";
-				reg = <0x80000 0x20000>;
-			};
-
-			ospi_2: partition@2 {
-				label = "Device Tree Blob";
-				reg = <0xA0000 0x20000>;
-			};
-
-			ospi_3: partition@3 {
-				label = "Kernel zImage";
-				reg = <0xC0000 0x600000>;
-			};
-
-			ospi_4: partition@4 {
-				label = "JFFS2 Formatted RFS";
-				reg = <0x6C0000 0x1940000>;
-			};
+		partition@0 {
+			label = "Unallocated";
+			reg = <0x0 0x2000000>;
 		};
 	};
 };
