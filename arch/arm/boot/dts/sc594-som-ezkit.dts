@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Device tree for ADI sc594-som-ezkit board
- * Copyright 2014 - 2020 Analog Devices Inc.
+ * Copyright 2014 - 2021 Analog Devices Inc.
  */
 
 /dts-v1/;
