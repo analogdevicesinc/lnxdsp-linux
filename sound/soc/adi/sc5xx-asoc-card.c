@@ -403,7 +403,7 @@ static int sc5xx_asoc_probe(struct platform_device *pdev)
 	sc5xx_asoc_dai_links[id++].codecs[0].of_node = of_parse_phandle(pdev->dev.of_node, "adi,codec", 1);
 #endif
 #if IS_ENABLED(CONFIG_SND_SC5XX_ADAU1761)
-	sc5xx_asoc_dai_links[id++].codec_of_node = of_parse_phandle(pdev->dev.of_node, "adi,codec", 0);
+	sc5xx_asoc_dai_links[id++].codecs[0].of_node = of_parse_phandle(pdev->dev.of_node, "adi,codec", 0);
 #endif
 
 	return devm_snd_soc_register_card(&pdev->dev, &sc5xx_asoc_card);
