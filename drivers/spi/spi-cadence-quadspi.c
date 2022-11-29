@@ -1678,6 +1678,10 @@ static const struct cqspi_driver_platdata socfpga_qspi = {
 	.quirks = CQSPI_DISABLE_DAC_MODE | CQSPI_NO_SUPPORT_WR_COMPLETION,
 };
 
+static const struct cqspi_driver_platdata adi_sc5xx = {
+	.hwcaps_mask = CQSPI_SUPPORTS_OCTAL,
+};
+
 static const struct of_device_id cqspi_dt_ids[] = {
 	{
 		.compatible = "cdns,qspi-nor",
@@ -1698,6 +1702,10 @@ static const struct of_device_id cqspi_dt_ids[] = {
 	{
 		.compatible = "intel,socfpga-qspi",
 		.data = (void *)&socfpga_qspi,
+	},
+	{
+		.compatible = "adi,sc5xx-qspi",
+		.data = (void *)&adi_sc5xx,
 	},
 	{ /* end of table */ }
 };
