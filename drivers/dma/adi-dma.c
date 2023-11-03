@@ -770,9 +770,11 @@ static irqreturn_t __adi_dma_handler(struct adi_dma_channel *channel,
 
 	desc->result.result = result;
 	desc->result.residue = 0;
-	list_add_tail(&desc->cb_node, &channel->cb_pending);
 
+	// Cyclic interrupts do not use the pending list to avoid complications
+	// during dma termination
 	if (!desc->cyclic) {
+		list_add_tail(&desc->cb_node, &channel->cb_pending);
 		channel->current_desc = NULL;
 		__issue_pending(channel);
 	}
@@ -829,21 +831,26 @@ static irqreturn_t adi_dma_thread_handler(int irq, void *id)
 
 	spin_lock_irqsave(&channel->lock, flags);
 
+	if (channel->current_desc && channel->current_desc->cyclic) {
+		dmaengine_desc_get_callback(&channel->current_desc->tx, &cb);
+
+		spin_unlock_irqrestore(&channel->lock, flags);
+		dmaengine_desc_callback_invoke(&cb, &channel->current_desc->result);
+		return IRQ_HANDLED;
+	}
+
 	while (!list_empty(&channel->cb_pending)) {
 		desc = list_first_entry(&channel->cb_pending, struct adi_dma_descriptor,
 			cb_node);
 		list_del(&desc->cb_node);
 
-		if (!desc->cyclic)
-			dma_cookie_complete(&desc->tx);
+		dma_cookie_complete(&desc->tx);
 		dmaengine_desc_get_callback(&desc->tx, &cb);
 
 		spin_unlock_irqrestore(&channel->lock, flags);
 		dmaengine_desc_callback_invoke(&cb, &desc->result);
 
-		if (!desc->cyclic)
-			desc->tx.desc_free(&desc->tx);
-
+		desc->tx.desc_free(&desc->tx);
 		spin_lock_irqsave(&channel->lock, flags);
 	}
 
