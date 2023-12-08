@@ -28,10 +28,6 @@
 	};
 
 	reserved-memory {
-		sram1_res: sram1-reserved@20040000 {
-			compatible = "adi,sram-access";
-			reg = <0x20040000 0x40000>;
-		};
 
 		vdev0vrings: vdev0vring0@20080000 {
 			reg = <0x20080000 0x4000>;
@@ -56,11 +52,13 @@
 		};
 	};
 
-	sram1_mmap: sram-mmap@0 {
-		compatible = "adi,sram-mmap";
-		memory-region = <&sram1_res>;
-		status = "okay";
-	};
+	sram2: sram-reserved@200C8000 {
+		compatible = "mmio-sram";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		reg = <0x200C8000 0x138000>;
+		ranges = <0 0x200C8000 0x138000>; /*1248KiB*/
+ 	};
 
 	scb {
 		sharc0: core1-rproc@0x28240000 {
@@ -99,33 +97,7 @@
 			status = "okay";
 		};
 
-		sharc0_rpmsg: core0-rpmsg@0x28240000 {
-				status = "disabled";
-				compatible = "adi,rpmsg-SC598";
-				core-id = <1>;
-				adi,rcu = <&rcu>;
-				adi,check-idle;
-				adi,rsc-table = <&rsc_tbl0>;
-				interrupts = <GIC_SPI 337 IRQ_TYPE_EDGE_RISING>; /* TRU0_SLV3 */
-				adi,tru = <&tru>;
-				adi,tru-master-id = <135>; /* trigger master SOFT4 */
-				vdev-vring = <&vdev0vrings>;
-				memory-region = <&vdev0buffer>;
-		};
 
-		sharc1_rpmsg: core1-rpmsg@0x28a40000 {
-				status = "disabled";
-				compatible = "adi,rpmsg-SC598";
-				core-id = <2>;
-				adi,rcu = <&rcu>;
-				adi,check-idle;
-				adi,rsc-table = <&rsc_tbl1>;
-				interrupts = <GIC_SPI 337 IRQ_TYPE_EDGE_RISING>; /* TRU0_SLV3 */
-				adi,tru = <&tru>;
-				adi,tru-master-id = <136>; /* trigger master SOFT5 */
-				vdev-vring = <&vdev1vrings>;
-				memory-region = <&vdev1buffer>;
-		};
 	};
 
 };
@@ -354,6 +326,10 @@
 	dr_mode = "host";
 	pinctrl-names = "default";
 	pinctrl-0 = <&usbc0_default>;
+	status = "okay";
+};
+
+&sram_mmap {
 	status = "okay";
 };
 
