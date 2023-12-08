@@ -297,7 +297,7 @@
 			interrupt-names = "tx", "rx", "status";
 			interrupts = <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>,
-						 <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
+				     <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
 			adi,use-edbo;
 			status = "disabled";
 		};
