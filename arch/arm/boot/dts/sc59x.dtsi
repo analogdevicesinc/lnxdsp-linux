@@ -285,6 +285,7 @@
 			dmas = <&dma_cluster2 20>, <&dma_cluster2 21>;
 			dma-names = "tx", "rx";
 			interrupt-parent = <&gic>;
+			interrupt-names = "tx", "rx", "status";
 			interrupts = <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
@@ -299,6 +300,7 @@
 			dmas = <&dma_cluster2 34>, <&dma_cluster2 35>;
 			dma-names = "tx", "rx";
 			interrupt-parent = <&gic>;
+			interrupt-names = "tx", "rx", "status";
 			interrupts = <GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 142 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
@@ -313,6 +315,7 @@
 			dmas = <&dma_cluster2 37>, <&dma_cluster2 38>;
 			dma-names = "tx", "rx";
 			interrupt-parent = <&gic>;
+			interrupt-names = "tx", "rx", "status";
 			interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>;
