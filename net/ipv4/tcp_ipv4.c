@@ -324,6 +324,8 @@ failure:
 	 * if necessary.
 	 */
 	tcp_set_state(sk, TCP_CLOSE);
+	if (!(sk->sk_userlocks & SOCK_BINDADDR_LOCK))
+		inet_reset_saddr(sk);
 	ip_rt_put(rt);
 	sk->sk_route_caps = 0;
 	inet->inet_dport = 0;
@@ -818,6 +820,9 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
 				   inet_twsk(sk)->tw_priority : sk->sk_priority;
 		transmit_time = tcp_transmit_time(sk);
 		xfrm_sk_clone_policy(ctl_sk, sk);
+	} else {
+		ctl_sk->sk_mark = 0;
+		ctl_sk->sk_priority = 0;
 	}
 	ip_send_unicast_reply(ctl_sk,
 			      skb, &TCP_SKB_CB(skb)->header.h4.opt,
@@ -825,7 +830,6 @@ static void tcp_v4_send_reset(const struct sock *sk, struct sk_buff *skb)
 			      &arg, arg.iov[0].iov_len,
 			      transmit_time);
 
-	ctl_sk->sk_mark = 0;
 	xfrm_sk_free_policy(ctl_sk);
 	sock_net_set(ctl_sk, &init_net);
 	__TCP_INC_STATS(net, TCP_MIB_OUTSEGS);
@@ -924,7 +928,6 @@ static void tcp_v4_send_ack(const struct sock *sk,
 			      &arg, arg.iov[0].iov_len,
 			      transmit_time);
 
-	ctl_sk->sk_mark = 0;
 	sock_net_set(ctl_sk, &init_net);
 	__TCP_INC_STATS(net, TCP_MIB_OUTSEGS);
 	local_bh_enable();
@@ -972,7 +975,7 @@ static void tcp_v4_reqsk_send_ack(const struct sock *sk, struct sk_buff *skb,
 			tcp_rsk(req)->rcv_nxt,
 			req->rsk_rcv_wnd >> inet_rsk(req)->rcv_wscale,
 			tcp_time_stamp_raw() + tcp_rsk(req)->ts_off,
-			req->ts_recent,
+			READ_ONCE(req->ts_recent),
 			0,
 			tcp_md5_do_lookup(sk, l3index, addr, AF_INET),
 			inet_rsk(req)->no_srccheck ? IP_REPLY_ARG_NOSRCCHECK : 0,
@@ -1860,6 +1863,7 @@ bool tcp_add_backlog(struct sock *sk, struct sk_buff *skb)
 #ifdef CONFIG_TLS_DEVICE
 	    tail->decrypted != skb->decrypted ||
 #endif
+	    !mptcp_skb_can_collapse(tail, skb) ||
 	    thtail->doff != th->doff ||
 	    memcmp(thtail + 1, th + 1, hdrlen - sizeof(*th)))
 		goto no_coalesce;
@@ -2339,16 +2343,15 @@ static void *listening_get_first(struct seq_file *seq)
 	st->offset = 0;
 	for (; st->bucket <= tcp_hashinfo.lhash2_mask; st->bucket++) {
 		struct inet_listen_hashbucket *ilb2;
-		struct inet_connection_sock *icsk;
+		struct hlist_nulls_node *node;
 		struct sock *sk;
 
 		ilb2 = &tcp_hashinfo.lhash2[st->bucket];
-		if (hlist_empty(&ilb2->head))
+		if (hlist_nulls_empty(&ilb2->nulls_head))
 			continue;
 
 		spin_lock(&ilb2->lock);
-		inet_lhash2_for_each_icsk(icsk, &ilb2->head) {
-			sk = (struct sock *)icsk;
+		sk_nulls_for_each(sk, node, &ilb2->nulls_head) {
 			if (seq_sk_match(seq, sk))
 				return sk;
 		}
@@ -2367,15 +2370,14 @@ static void *listening_get_next(struct seq_file *seq, void *cur)
 {
 	struct tcp_iter_state *st = seq->private;
 	struct inet_listen_hashbucket *ilb2;
-	struct inet_connection_sock *icsk;
+	struct hlist_nulls_node *node;
 	struct sock *sk = cur;
 
 	++st->num;
 	++st->offset;
 
-	icsk = inet_csk(sk);
-	inet_lhash2_for_each_icsk_continue(icsk) {
-		sk = (struct sock *)icsk;
+	sk = sk_nulls_next(sk);
+	sk_nulls_for_each_from(sk, node) {
 		if (seq_sk_match(seq, sk))
 			return sk;
 	}
@@ -2758,7 +2760,7 @@ static int tcp_prog_seq_show(struct bpf_prog *prog, struct bpf_iter_meta *meta,
 static void bpf_iter_tcp_put_batch(struct bpf_tcp_iter_state *iter)
 {
 	while (iter->cur_sk < iter->end_sk)
-		sock_put(iter->batch[iter->cur_sk++]);
+		sock_gen_put(iter->batch[iter->cur_sk++]);
 }
 
 static int bpf_iter_tcp_realloc_batch(struct bpf_tcp_iter_state *iter,
@@ -2784,16 +2786,15 @@ static unsigned int bpf_iter_tcp_listening_batch(struct seq_file *seq,
 {
 	struct bpf_tcp_iter_state *iter = seq->private;
 	struct tcp_iter_state *st = &iter->state;
-	struct inet_connection_sock *icsk;
+	struct hlist_nulls_node *node;
 	unsigned int expected = 1;
 	struct sock *sk;
 
 	sock_hold(start_sk);
 	iter->batch[iter->end_sk++] = start_sk;
 
-	icsk = inet_csk(start_sk);
-	inet_lhash2_for_each_icsk_continue(icsk) {
-		sk = (struct sock *)icsk;
+	sk = sk_nulls_next(start_sk);
+	sk_nulls_for_each_from(sk, node) {
 		if (seq_sk_match(seq, sk)) {
 			if (iter->end_sk < iter->max_sk) {
 				sock_hold(sk);
@@ -2917,7 +2918,7 @@ static void *bpf_iter_tcp_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 		 * st->bucket.  See tcp_seek_last_pos().
 		 */
 		st->offset++;
-		sock_put(iter->batch[iter->cur_sk++]);
+		sock_gen_put(iter->batch[iter->cur_sk++]);
 	}
 
 	if (iter->cur_sk < iter->end_sk)

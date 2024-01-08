@@ -35,7 +35,7 @@ static int aq_apply_macsec_cfg(struct aq_nic_s *nic);
 static int aq_apply_secy_cfg(struct aq_nic_s *nic,
 			     const struct macsec_secy *secy);
 
-static void aq_ether_addr_to_mac(u32 mac[2], unsigned char *emac)
+static void aq_ether_addr_to_mac(u32 mac[2], const unsigned char *emac)
 {
 	u32 tmp[2] = { 0 };
 
@@ -585,6 +585,7 @@ static int aq_update_txsa(struct aq_nic_s *nic, const unsigned int sc_idx,
 
 	ret = aq_mss_set_egress_sakey_record(hw, &key_rec, sa_idx);
 
+	memzero_explicit(&key_rec, sizeof(key_rec));
 	return ret;
 }
 
@@ -932,6 +933,7 @@ static int aq_update_rxsa(struct aq_nic_s *nic, const unsigned int sc_idx,
 
 	ret = aq_mss_set_ingress_sakey_record(hw, &sa_key_record, sa_idx);
 
+	memzero_explicit(&sa_key_record, sizeof(sa_key_record));
 	return ret;
 }
 

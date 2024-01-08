@@ -156,7 +156,11 @@ smb2_reconnect(__le16 smb2_command, struct cifs_tcon *tcon,
 	if (tcon == NULL)
 		return 0;
 
-	if (smb2_command == SMB2_TREE_CONNECT)
+	/*
+	 * Need to also skip SMB2_IOCTL because it is used for checking nested dfs links in
+	 * cifs_tree_connect().
+	 */
+	if (smb2_command == SMB2_TREE_CONNECT || smb2_command == SMB2_IOCTL)
 		return 0;
 
 	if (tcon->tidStatus == CifsExiting) {
@@ -360,10 +364,15 @@ static int __smb2_plain_req_init(__le16 smb2_command, struct cifs_tcon *tcon,
 				 void **request_buf, unsigned int *total_len)
 {
 	/* BB eventually switch this to SMB2 specific small buf size */
-	if (smb2_command == SMB2_SET_INFO)
+	switch (smb2_command) {
+	case SMB2_SET_INFO:
+	case SMB2_QUERY_INFO:
 		*request_buf = cifs_buf_get();
-	else
+		break;
+	default:
 		*request_buf = cifs_small_buf_get();
+		break;
+	}
 	if (*request_buf == NULL) {
 		/* BB should we add a retry in here if not a writepage? */
 		return -ENOMEM;
@@ -3411,7 +3420,12 @@ SMB2_query_info_init(struct cifs_tcon *tcon, struct TCP_Server_Info *server,
 	struct smb2_query_info_req *req;
 	struct kvec *iov = rqst->rq_iov;
 	unsigned int total_len;
+	size_t len;
 	int rc;
+
+	if (unlikely(check_add_overflow(input_len, sizeof(*req), &len) ||
+		     len > CIFSMaxBufSize))
+		return -EINVAL;
 
 	rc = smb2_plain_req_init(SMB2_QUERY_INFO, tcon, server,
 				 (void **) &req, &total_len);
@@ -3434,7 +3448,7 @@ SMB2_query_info_init(struct cifs_tcon *tcon, struct TCP_Server_Info *server,
 
 	iov[0].iov_base = (char *)req;
 	/* 1 for Buffer */
-	iov[0].iov_len = total_len - 1 + input_len;
+	iov[0].iov_len = len;
 	return 0;
 }
 
@@ -3442,7 +3456,7 @@ void
 SMB2_query_info_free(struct smb_rqst *rqst)
 {
 	if (rqst && rqst->rq_iov)
-		cifs_small_buf_release(rqst->rq_iov[0].iov_base); /* request */
+		cifs_buf_release(rqst->rq_iov[0].iov_base); /* request */
 }
 
 static int
@@ -3995,12 +4009,15 @@ smb2_readv_callback(struct mid_q_entry *mid)
 				(struct smb2_sync_hdr *)rdata->iov[0].iov_base;
 	struct cifs_credits credits = { .value = 0, .instance = 0 };
 	struct smb_rqst rqst = { .rq_iov = &rdata->iov[1],
-				 .rq_nvec = 1,
-				 .rq_pages = rdata->pages,
-				 .rq_offset = rdata->page_offset,
-				 .rq_npages = rdata->nr_pages,
-				 .rq_pagesz = rdata->pagesz,
-				 .rq_tailsz = rdata->tailsz };
+				 .rq_nvec = 1, };
+
+	if (rdata->got_bytes) {
+		rqst.rq_pages = rdata->pages;
+		rqst.rq_offset = rdata->page_offset;
+		rqst.rq_npages = rdata->nr_pages;
+		rqst.rq_pagesz = rdata->pagesz;
+		rqst.rq_tailsz = rdata->tailsz;
+	}
 
 	WARN_ONCE(rdata->server != mid->server,
 		  "rdata server %p != mid server %p",
@@ -5169,6 +5186,11 @@ build_qfs_info_req(struct kvec *iov, struct cifs_tcon *tcon,
 	return 0;
 }
 
+static inline void free_qfs_info_req(struct kvec *iov)
+{
+	cifs_buf_release(iov->iov_base);
+}
+
 int
 SMB311_posix_qfs_info(const unsigned int xid, struct cifs_tcon *tcon,
 	      u64 persistent_fid, u64 volatile_fid, struct kstatfs *fsdata)
@@ -5200,7 +5222,7 @@ SMB311_posix_qfs_info(const unsigned int xid, struct cifs_tcon *tcon,
 
 	rc = cifs_send_recv(xid, ses, server,
 			    &rqst, &resp_buftype, flags, &rsp_iov);
-	cifs_small_buf_release(iov.iov_base);
+	free_qfs_info_req(&iov);
 	if (rc) {
 		cifs_stats_fail_inc(tcon, SMB2_QUERY_INFO_HE);
 		goto posix_qfsinf_exit;
@@ -5251,7 +5273,7 @@ SMB2_QFS_info(const unsigned int xid, struct cifs_tcon *tcon,
 
 	rc = cifs_send_recv(xid, ses, server,
 			    &rqst, &resp_buftype, flags, &rsp_iov);
-	cifs_small_buf_release(iov.iov_base);
+	free_qfs_info_req(&iov);
 	if (rc) {
 		cifs_stats_fail_inc(tcon, SMB2_QUERY_INFO_HE);
 		goto qfsinf_exit;
@@ -5318,7 +5340,7 @@ SMB2_QFS_attr(const unsigned int xid, struct cifs_tcon *tcon,
 
 	rc = cifs_send_recv(xid, ses, server,
 			    &rqst, &resp_buftype, flags, &rsp_iov);
-	cifs_small_buf_release(iov.iov_base);
+	free_qfs_info_req(&iov);
 	if (rc) {
 		cifs_stats_fail_inc(tcon, SMB2_QUERY_INFO_HE);
 		goto qfsattr_exit;
