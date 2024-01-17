@@ -324,10 +324,13 @@ static void adi_twi_handle_interrupt(struct adi_twi_iface *iface,
 				iowrite16(writeValue, &iface->regs_base->master_ctl);
 				iface->manual_stop = 1;
 			}
+			
 			/* remove restart bit before last message */
-			if (iface->cur_msg + 1 == iface->msg_num)
+			if (iface->cur_msg + 1 == iface->msg_num) {
 				writeValue = ioread16(&iface->regs_base->master_ctl) & ~RSTART;
 				iowrite16(writeValue, &iface->regs_base->master_ctl);
+			}
+
 		} else {
 			iface->result = 1;
 			iowrite16(0, &iface->regs_base->int_mask);
