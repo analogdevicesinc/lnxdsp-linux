@@ -537,12 +537,18 @@ static enum dma_status adi_dma_tx_status(struct dma_chan *chan, dma_cookie_t coo
 	// @todo this is incorrect for scatterlists length > 1, instead it only computes
 	//       the residue of the current scatterlist item, but there are also no users
 	//       that require that currently
+	
+
 	done = get_dma_curr_addr(adi_chan->iosrc) - desc->src;
 	bytes = (desc->xcnt * desc->xmod);
 	if (desc->cfg & DMA2D)
 		bytes = bytes * desc->ycnt;
 
+	//pr_info("xcnt:%08x xmod:%08x ycnt:%08x ymod:%08x cfg:%08x done:%08x bytes:%08x\n", 
+	//		desc->xcnt, desc->xmod, desc->ycnt, desc->ymod, desc->cfg, (u32)done, (u32)bytes);
+
 	txstate->residue = (u32) (bytes - done);
+
 	return DMA_IN_PROGRESS;
 }
 

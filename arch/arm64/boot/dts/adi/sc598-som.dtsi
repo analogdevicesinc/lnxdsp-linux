@@ -157,18 +157,26 @@
 	/* hwflow-en-pin = <&ssw0 6 GPIO_ACTIVE_LOW>;  UART0_FLOW_EN */
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart0_default>;
-	status = "okay";
+	status = "disabled";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart1_default>;
+	status = "disabled";
 };
 
 &spi0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&spi0_default>;
 	status = "disabled";
+	cs-gpios = <&gpa 9 GPIO_ACTIVE_LOW>;
 
-	spidev@9{
+	slave@0{
 		compatible = "adi,generic-spidev";
-		reg = <9>;  // SPI0_SSEL1 / GPIO_PA9
-		spi-max-frequency = <4000000>;
+		reg = <0>;
+		spi-max-frequency = <12000000>;
+		//adi,enable-dma= "true";
 	};
 };
 
@@ -178,10 +186,11 @@
 	status = "disabled";
 	cs-gpios = <&gpa 13 GPIO_ACTIVE_LOW>;
 
-	spidev@0 {
+	main@0 {
 		compatible = "adi,generic-spidev";
 		reg = <0>;
-		spi-max-frequency = <4000000>;
+		spi-max-frequency = <2000>;
+		//adi,enable-dma= "true";
 	};
 };
 
@@ -191,10 +200,10 @@
 	status = "disabled";
 	cs-gpios = <&gpg 15 GPIO_ACTIVE_LOW>;
 
-	spidev@0 {
+	slave@0 {
 		compatible = "adi,generic-spidev";
 		reg = <0>;
-		spi-max-frequency = <4000000>;
+		spi-max-frequency = <48000000>;
 	};
 };
 
@@ -243,7 +252,7 @@
 };
 
 &i2c0 {
-	status = "okay";
+	status = "disabled";
 };
 
 &i2c1 {
@@ -351,7 +360,7 @@
 };
 
 &usb0 {
-	dr_mode = "host";
+	dr_mode = "otg";
 	pinctrl-names = "default";
 	pinctrl-0 = <&usbc0_default>;
 	status = "okay";
@@ -372,17 +381,23 @@
 					 <ADI_ADSP_PINMUX('A', 9, ADI_ADSP_PINFUNC_ALT1)>;
 		};
 	};
+	uart1_default: uart1_default_pins {
+		pins {
+			pinmux = <ADI_ADSP_PINMUX('D', 4, ADI_ADSP_PINFUNC_ALT0)>,
+					 <ADI_ADSP_PINMUX('D', 5, ADI_ADSP_PINFUNC_ALT0)>;
+		};
+	};
 	spi0_default: spi0_default_pins {
 		pins {
 			pinmux = <ADI_ADSP_PINMUX('A', 6, ADI_ADSP_PINFUNC_ALT0)>,
-				 <ADI_ADSP_PINMUX('A', 7, ADI_ADSP_PINFUNC_ALT0)>,
+					 <ADI_ADSP_PINMUX('A', 7, ADI_ADSP_PINFUNC_ALT0)>,
 					 <ADI_ADSP_PINMUX('A', 8, ADI_ADSP_PINFUNC_ALT0)>;
 		};
 	};
 	spi1_default: spi1_default_pins {
 		pins {
 			pinmux = <ADI_ADSP_PINMUX('A', 10, ADI_ADSP_PINFUNC_ALT1)>,
-				 <ADI_ADSP_PINMUX('A', 11, ADI_ADSP_PINFUNC_ALT1)>,
+					 <ADI_ADSP_PINMUX('A', 11, ADI_ADSP_PINFUNC_ALT1)>,
 					 <ADI_ADSP_PINMUX('A', 12, ADI_ADSP_PINFUNC_ALT1)>;
 		};
 	};
@@ -398,7 +413,7 @@
 	spi3_default: spi3_default_pins {
 		pins {
 			pinmux = <ADI_ADSP_PINMUX('G', 5, ADI_ADSP_PINFUNC_ALT0)>,
-				 <ADI_ADSP_PINMUX('G', 6, ADI_ADSP_PINFUNC_ALT0)>,
+					 <ADI_ADSP_PINMUX('G', 6, ADI_ADSP_PINFUNC_ALT0)>,
 					 <ADI_ADSP_PINMUX('G', 7, ADI_ADSP_PINFUNC_ALT0)>;
 		};
 	};
@@ -489,3 +504,4 @@
 		};
 	};
 };
+

@@ -164,6 +164,24 @@
 
 };
 
+&spi0 {
+	spi-slave;
+	status = "okay";
+};
+
+&spi1 {
+	status = "okay";
+};
+
+&spi3 {
+	spi-slave;
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
 &emac1 {
 	status = "disabled";
 };

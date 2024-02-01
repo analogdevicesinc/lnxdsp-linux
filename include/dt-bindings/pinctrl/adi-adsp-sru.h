@@ -386,7 +386,6 @@
 #define SPT3_AD1_O_D              367     //GROUP_D
 #define SPT3_BD0_O_D              368     //GROUP_D
 #define SPT3_BD1_O_D              369     //GROUP_D
-#define MLB0_CLKOUT_O_D           370     //GROUP_D
 #define SPDIF0_TX_BLKSTART_O_D    371     //GROUP_D
 #define SPT3_ACLK_O_D             372     //GROUP_D
 #define SPT3_BCLK_O_D             373     //GROUP_D

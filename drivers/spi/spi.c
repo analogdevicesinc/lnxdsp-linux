@@ -2899,6 +2899,7 @@ int spi_register_controller(struct spi_controller *ctlr)
 		}
 	}
 
+
 	/*
 	 * Even if it's just one always-selected device, there must
 	 * be at least one chipselect.
@@ -2911,7 +2912,7 @@ int spi_register_controller(struct spi_controller *ctlr)
 	status = device_add(&ctlr->dev);
 	if (status < 0)
 		goto free_bus_id;
-	dev_dbg(dev, "registered %s %s\n",
+	dev_info(dev, "registered %s %s\n",
 			spi_controller_is_slave(ctlr) ? "slave" : "master",
 			dev_name(&ctlr->dev));
 
