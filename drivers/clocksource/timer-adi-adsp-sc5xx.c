@@ -256,7 +256,7 @@ static irqreturn_t cevt_gptimer_handler(int irq, void *dev)
 }
 
 static int gptimer_counter_count_read(struct counter_device *counter,
-				struct counter_count *count, unsigned long *val)
+				struct counter_count *count, unsigned long long *val)
 {
 	uint32_t id = count->id;
 	struct sc5xx_gptimer *timer = &gptimer_controller.timers[id];
