@@ -140,30 +140,30 @@
 		reg = <0>;
 	};
 
-	ad7879_touchscreen@1 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "adi,ad7879";
-		spi-max-frequency = <5000000>;
-		reg = <1>;
-		gpio = <88>;
-		gpio-controller;
-		spi-cpha;
-		spi-cpol;
-		touchscreen-max-pressure = <10000>;
-		adi,resistance-plate-x = <620>;
-		adi,first-conversion-delay = /bits/ 8 <3>;
-		adi,acquisition-time = /bits/ 8 <1>;
-		adi,median-filter-size = /bits/ 8 <2>;
-		adi,averaging = /bits/ 8 <1>;
-		adi,conversion-interval = /bits/ 8 <255>;
-	};
+//	ad7879_touchscreen@1 {
+//		#address-cells = <1>;
+//		#size-cells = <1>;
+//		compatible = "adi,ad7879";
+//		spi-max-frequency = <5000000>;
+//		reg = <1>;
+//		gpio = <88>;
+//		gpio-controller;
+//		spi-cpha;
+//		spi-cpol;
+//		touchscreen-max-pressure = <10000>;
+//		adi,resistance-plate-x = <620>;
+//		adi,first-conversion-delay = /bits/ 8 <3>;
+//		adi,acquisition-time = /bits/ 8 <1>;
+//		adi,median-filter-size = /bits/ 8 <2>;
+//		adi,averaging = /bits/ 8 <1>;
+//		adi,conversion-interval = /bits/ 8 <255>;
+//	};
 };
 
 &spi1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&spi1_default>;
-	status = "okay";
+	status = "disabled";
 
 	cs-gpios = <&gpa 13 GPIO_ACTIVE_LOW>;
 
