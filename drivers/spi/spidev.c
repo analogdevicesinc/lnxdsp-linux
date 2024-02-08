@@ -691,6 +691,7 @@ static const struct spi_device_id spidev_spi_ids[] = {
 	{ .name = "m53cpld" },
 	{ .name = "spi-petra" },
 	{ .name = "spi-authenta" },
+	{ .name = "generic-spidev"},
 	{},
 };
 MODULE_DEVICE_TABLE(spi, spidev_spi_ids);
