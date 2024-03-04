@@ -187,7 +187,7 @@
 	main@0 {
 		compatible = "adi,generic-spidev";
 		reg = <0>;
-		spi-max-frequency = <9000000>;
+		spi-max-frequency = <12000>;
 		adi,enable-dma= "true";
 	};
 };

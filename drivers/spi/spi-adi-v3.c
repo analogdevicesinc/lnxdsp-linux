@@ -641,8 +641,6 @@ static void adi_spi_rx_dma_isr(void *data)
 	else
 		dev_info(&drv_data->spi_ctrl->dev, "dmaengine status:%d\n",status);
 
-	dev_info(drv_data->dev,"TFIFO:%08x\n",ioread32(&drv_data->regs->rfifo));
-
 	iowrite32(0, &drv_data->regs->tx_control);
 	iowrite32(0, &drv_data->regs->rx_control);
 	spi_finalize_current_transfer(drv_data->spi_ctrl);
@@ -667,9 +665,6 @@ static void adi_spi_tx_dma_isr(void *data)
 		pr_info("[%d]master status:%08x\n",__LINE__,drv->regs->status);
 	else
 		pr_info("[%d]slave status:%08x\n",__LINE__,drv->regs->status);
-
-
-	dev_info(drv->dev,"TFIFO:%08x\n",ioread32(&drv->regs->tfifo));
 
 	if (drv->cur_transfer->rx_buf)
 		dma_async_issue_pending(drv->spi_ctrl->dma_rx);
@@ -713,15 +708,13 @@ dma_op_tx:
 
 		drv->tx_cookie = dmaengine_submit(tx_desc);
 
+		dev_info(drv->dev,"TFIFO:%08x\n",ioread32(&drv->regs->tfifo));
 		if(spi_controller_is_slave(spi_ctrl)) {
 			//resetting txctl
 			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TDR_NF, &drv->regs->tx_control);
-			dev_info(drv->dev,"TFIFO:%08x\n",ioread32(&drv->regs->tfifo));
 		} else {
 			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TTI | SPI_TXCTL_TDR_NF,
 				&drv->regs->tx_control);
-			//if master is writing, check if slave has something to give back
-			//iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RTI, &drv->regs->rx_control);
 		}
 
 		dev_info(drv->dev,"flushing final tx transaction\n");
@@ -729,8 +722,10 @@ dma_op_tx:
 		dma_async_issue_pending(spi_ctrl->dma_tx);
 		dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
 
-		//wait for transaction to be completed
-		dma_wait_for_async_tx(tx_desc);
+		if(spi_controller_is_slave(spi_ctrl)) {
+			//wait for transaction to be completed
+			dma_wait_for_async_tx(tx_desc);
+		}
 
 	}
 
@@ -749,13 +744,14 @@ dma_op_rx:
 			goto error;
 		}
 
-		if ( !((xfer->tx_buf) && (spi_controller_is_slave(spi_ctrl))) ) {
+		if (!spi_controller_is_slave(spi_ctrl)) {
 			rx_desc->callback = adi_spi_rx_dma_isr;
 			rx_desc->callback_param = drv;
 		}
 
 		drv->rx_cookie = dmaengine_submit(rx_desc);
 		
+		dev_info(drv->dev,"RFIFO:%08x\n",ioread32(&drv->regs->rfifo));
 		if(spi_controller_is_slave(spi_ctrl)) {
 			iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RDR_NE,
 				&drv->regs->rx_control);
@@ -768,14 +764,22 @@ dma_op_rx:
 		dev_info(drv->dev,"cur_transfer_rx:%08x\n",*(uint32_t *)drv->cur_transfer->rx_buf);
 		dma_async_issue_pending(spi_ctrl->dma_rx);
 
-		//wait for transaction to be completed
-		dma_wait_for_async_tx(rx_desc);
+		if(spi_controller_is_slave(spi_ctrl)) {
+			//wait for transaction to be completed
+			dma_wait_for_async_tx(rx_desc);
+		}
 	}
 
 	if(spi_controller_is_slave(spi_ctrl))
 		goto dma_op_tx;
 
 dma_op_exit:
+
+	if(spi_controller_is_slave(spi_ctrl)) {
+		iowrite32(0, &drv->regs->tx_control);
+		iowrite32(0, &drv->regs->rx_control);
+		spi_finalize_current_transfer(spi_ctrl);
+	}
 
 	dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
 	//let callbacks trigger completion
