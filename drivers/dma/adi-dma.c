@@ -544,22 +544,7 @@ static enum dma_status adi_dma_tx_status(struct dma_chan *chan, dma_cookie_t coo
 	if (desc->cfg & DMA2D)
 		bytes = bytes * desc->ycnt;
 
-	if((adi_chan->id == 24) || (adi_chan->id == 22)){
-		pr_info("xcnt:%08x xmod:%08x ycnt:%08x ymod:%08x cfg:%08x done:%08x bytes:%08x\n", 
-			desc->xcnt, desc->xmod, desc->ycnt, desc->ymod, desc->cfg, (u32)done, (u32)bytes);
-	
-		ret = dma_cookie_status(chan, cookie, txstate);
-		if (ret == DMA_COMPLETE)
-			return ret;
-	}
-
 	txstate->residue = (u32) (bytes - done);
-	if(!txstate->residue) {
-		if(adi_chan->id == 24)
-			pr_info("residue 0!\n");
-		return DMA_COMPLETE;
-	}
-
 	return DMA_IN_PROGRESS;
 }
 

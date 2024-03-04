@@ -646,6 +646,7 @@ static void adi_spi_rx_dma_isr(void *data)
 	spi_finalize_current_transfer(drv_data->spi_ctrl);
 }
 
+
 /*
  * Disable tx path and enable rx path for dual/quad modes
  */
@@ -671,6 +672,60 @@ static void adi_spi_tx_dma_isr(void *data)
 	 else
 		spi_finalize_current_transfer(drv->spi_ctrl);
 }
+
+/*
+ * Disable both paths and alert spi core that this transfer is done
+ */
+static void adi_spi_slave_tx_dma_isr(void *data)
+{
+	struct adi_spi_controller *drv_data = data;
+
+	struct dma_tx_state state;
+	enum dma_status status;
+
+
+	if (!spi_controller_is_slave(drv_data->spi_ctrl))
+		pr_info("[%d]master status:%08x\n",__LINE__,drv_data->regs->status);
+	else
+		pr_info("[%d]slave status:%08x\n",__LINE__,drv_data->regs->status);
+
+	status = dmaengine_tx_status(drv_data->spi_ctrl->dma_tx, drv_data->tx_cookie, &state);
+	if (status == DMA_ERROR)
+		dev_err(&drv_data->spi_ctrl->dev, "spi tx dma error\n");
+	else
+		dev_info(&drv_data->spi_ctrl->dev, "dmaengine status:%d\n",status);
+
+	iowrite32(0, &drv_data->regs->tx_control);
+	iowrite32(0, &drv_data->regs->rx_control);
+	spi_finalize_current_transfer(drv_data->spi_ctrl);
+}
+
+/*
+ * Disable tx path and enable rx path for dual/quad modes
+ */
+static void adi_spi_slave_rx_dma_isr(void *data)
+{
+	struct adi_spi_controller *drv = data;
+	struct dma_tx_state state;
+	enum dma_status status;
+
+	status = dmaengine_tx_status(drv->spi_ctrl->dma_rx, drv->rx_cookie, &state);
+	if (status == DMA_ERROR)
+		dev_err(&drv->spi_ctrl->dev, "spi rx dma error\n");
+
+	iowrite32(0, &drv->regs->rx_control);
+	
+	if (!spi_controller_is_slave(drv->spi_ctrl))
+		pr_info("[%d]master status:%08x\n",__LINE__,drv->regs->status);
+	else
+		pr_info("[%d]slave status:%08x\n",__LINE__,drv->regs->status);
+
+	if (drv->cur_transfer->tx_buf)
+		dma_async_issue_pending(drv->spi_ctrl->dma_tx);
+	 else
+		spi_finalize_current_transfer(drv->spi_ctrl);
+}
+
 
 static int adi_spi_dma_xfer(struct spi_controller *spi_ctrl, struct spi_device *spi,
 	struct spi_transfer *xfer)
@@ -701,34 +756,35 @@ dma_op_tx:
 		// since spi_finalize_current_transfer can only be called once
 		//
 		// but this is not the case for a spi-sub device (its inversed)
-		if ( (!xfer->rx_buf) && (!spi_controller_is_slave(spi_ctrl)) ) {
-			tx_desc->callback = adi_spi_tx_dma_isr;
+		if (!spi_controller_is_slave(spi_ctrl)) {
+			if ((!xfer->rx_buf)) {
+				tx_desc->callback = adi_spi_tx_dma_isr;
+				tx_desc->callback_param = drv;
+			}
+
+		} else {
+			tx_desc->callback = adi_spi_slave_tx_dma_isr;
 			tx_desc->callback_param = drv;
 		}
 
 		drv->tx_cookie = dmaengine_submit(tx_desc);
-
+		
+		dev_info(drv->dev,"flushing final tx transaction\n");
+		dev_info(drv->dev,"cur_transfer_tx:%08x\n",*(uint32_t *)drv->cur_transfer->tx_buf);
+		dma_async_issue_pending(spi_ctrl->dma_tx);
+		dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
 		dev_info(drv->dev,"TFIFO:%08x\n",ioread32(&drv->regs->tfifo));
+		dma_sync_wait(tx_desc->chan, tx_desc->cookie);
+
 		if(spi_controller_is_slave(spi_ctrl)) {
-			//resetting txctl
-			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TDR_NF, &drv->regs->tx_control);
+			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TDR_NF , &drv->regs->tx_control);
+			dma_async_issue_pending(spi_ctrl->dma_tx);
 		} else {
 			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TTI | SPI_TXCTL_TDR_NF,
 				&drv->regs->tx_control);
 		}
 
-		dev_info(drv->dev,"flushing final tx transaction\n");
-		dev_info(drv->dev,"cur_transfer_tx:%08x\n",*(uint32_t *)drv->cur_transfer->tx_buf);
-		dma_async_issue_pending(spi_ctrl->dma_tx);
-		dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
-
-		if(spi_controller_is_slave(spi_ctrl)) {
-			//wait for transaction to be completed
-			dma_wait_for_async_tx(tx_desc);
-		}
-
 	}
-
 
 	if(spi_controller_is_slave(spi_ctrl))
 		goto dma_op_exit;
@@ -747,6 +803,9 @@ dma_op_rx:
 		if (!spi_controller_is_slave(spi_ctrl)) {
 			rx_desc->callback = adi_spi_rx_dma_isr;
 			rx_desc->callback_param = drv;
+		} else if (!xfer->tx_buf) {
+			rx_desc->callback = adi_spi_slave_rx_dma_isr;
+			rx_desc->callback_param = drv;
 		}
 
 		drv->rx_cookie = dmaengine_submit(rx_desc);
@@ -763,24 +822,13 @@ dma_op_rx:
 		dev_info(drv->dev,"flushing final rx transaction\n");
 		dev_info(drv->dev,"cur_transfer_rx:%08x\n",*(uint32_t *)drv->cur_transfer->rx_buf);
 		dma_async_issue_pending(spi_ctrl->dma_rx);
-
-		if(spi_controller_is_slave(spi_ctrl)) {
-			//wait for transaction to be completed
-			dma_wait_for_async_tx(rx_desc);
-		}
 	}
 
 	if(spi_controller_is_slave(spi_ctrl))
 		goto dma_op_tx;
 
 dma_op_exit:
-
-	if(spi_controller_is_slave(spi_ctrl)) {
-		iowrite32(0, &drv->regs->tx_control);
-		iowrite32(0, &drv->regs->rx_control);
-		spi_finalize_current_transfer(spi_ctrl);
-	}
-
+	
 	dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
 	//let callbacks trigger completion
 	return 1;
