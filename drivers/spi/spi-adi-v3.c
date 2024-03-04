@@ -702,13 +702,27 @@ dma_op_tx:
 			goto error;
 		}
 
-		// not sure why transmission callback was disabled 
-		if (!xfer->rx_buf) {
+		// transmission callback disabled in case rx also needs to be done
+		// since spi_finalize_current_transfer can only be called once
+		//
+		// but this is not the case for a spi-sub device (its inversed)
+		if ( (!xfer->rx_buf) && (!spi_controller_is_slave(spi_ctrl)) ) {
 			tx_desc->callback = adi_spi_tx_dma_isr;
 			tx_desc->callback_param = drv;
 		}
 
 		drv->tx_cookie = dmaengine_submit(tx_desc);
+
+		if(spi_controller_is_slave(spi_ctrl)) {
+			//resetting txctl
+			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TDR_NF, &drv->regs->tx_control);
+			dev_info(drv->dev,"TFIFO:%08x\n",ioread32(&drv->regs->tfifo));
+		} else {
+			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TTI | SPI_TXCTL_TDR_NF,
+				&drv->regs->tx_control);
+			//if master is writing, check if slave has something to give back
+			//iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RTI, &drv->regs->rx_control);
+		}
 
 		dev_info(drv->dev,"flushing final tx transaction\n");
 		dev_info(drv->dev,"cur_transfer_tx:%08x\n",*(uint32_t *)drv->cur_transfer->tx_buf);
@@ -718,25 +732,6 @@ dma_op_tx:
 		//wait for transaction to be completed
 		dma_wait_for_async_tx(tx_desc);
 
-		if(spi_controller_is_slave(spi_ctrl)) {
-			//resetting txctl
-			iowrite32(0, &drv->regs->tx_control);
-			iowrite32(0, &drv->regs->rx_control);
-			
-			iowrite32(~SPI_CTL_EN, &drv->regs->control);
-			iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RDR_NE , &drv->regs->rx_control);
-			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TDR_NF, &drv->regs->tx_control);
-			iowrite32(SPI_CTL_EN, &drv->regs->control);
-
-			dev_info(drv->dev,"TFIFO:%08x\n",ioread32(&drv->regs->tfifo));
-			//if FIFO only has 0, something is probably wrong
-			
-		} else {
-			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TTI | SPI_TXCTL_TDR_NF,
-				&drv->regs->tx_control);
-			//if master is writing, check if slave has something to give back
-			iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RTI, &drv->regs->rx_control);
-		}
 	}
 
 
@@ -754,8 +749,11 @@ dma_op_rx:
 			goto error;
 		}
 
-		rx_desc->callback = adi_spi_rx_dma_isr;
-		rx_desc->callback_param = drv;
+		if ( !((xfer->tx_buf) && (spi_controller_is_slave(spi_ctrl))) ) {
+			rx_desc->callback = adi_spi_rx_dma_isr;
+			rx_desc->callback_param = drv;
+		}
+
 		drv->rx_cookie = dmaengine_submit(rx_desc);
 		
 		if(spi_controller_is_slave(spi_ctrl)) {
