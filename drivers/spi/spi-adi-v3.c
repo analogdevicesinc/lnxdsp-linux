@@ -385,19 +385,19 @@ static bool adi_spi_check_watermark_condition_rx(struct adi_spi_controller *spi_
 }
 
 
-static void adi_spi_disable(struct adi_spi_controller *drv_data)
+static void adi_spi_disable(struct adi_spi_controller *drv)
 {
 	u32 ctl;
 
-	ctl = ioread32(&drv_data->regs->control);
+	ctl = ioread32(&drv->regs->control);
 	ctl &= ~SPI_CTL_EN;
-	iowrite32(ctl, &drv_data->regs->control);
+	iowrite32(ctl, &drv->regs->control);
 }
 
-static void adi_spi_dma_terminate(struct adi_spi_controller *drv_data)
+static void adi_spi_dma_terminate(struct adi_spi_controller *drv)
 {
-	dmaengine_terminate_sync(drv_data->spi_ctrl->dma_tx);
-	dmaengine_terminate_sync(drv_data->spi_ctrl->dma_rx);
+	dmaengine_terminate_sync(drv->spi_ctrl->dma_tx);
+	dmaengine_terminate_sync(drv->spi_ctrl->dma_rx);
 }
 
 /* Calculate the SPI_CLOCK register value based on input HZ */
@@ -624,26 +624,28 @@ static int adi_spi_pio_xfer(struct spi_controller *spi_ctrl, struct spi_device *
  */
 static void adi_spi_rx_dma_isr(void *data)
 {
-	struct adi_spi_controller *drv_data = data;
+	struct adi_spi_controller *drv = data;
 
 	struct dma_tx_state state;
 	enum dma_status status;
 
 
-	if (!spi_controller_is_slave(drv_data->spi_ctrl))
-		pr_info("[%d]master status:%08x\n",__LINE__,drv_data->regs->status);
+	if (!spi_controller_is_slave(drv->spi_ctrl))
+		pr_info("[%d]master status:%08x\n",__LINE__,drv->regs->status);
 	else
-		pr_info("[%d]slave status:%08x\n",__LINE__,drv_data->regs->status);
+		pr_info("[%d]slave status:%08x\n",__LINE__,drv->regs->status);
 
-	status = dmaengine_tx_status(drv_data->spi_ctrl->dma_rx, drv_data->rx_cookie, &state);
+	while(!(drv->regs->status & SPI_STAT_SPIF));
+
+	status = dmaengine_tx_status(drv->spi_ctrl->dma_rx, drv->rx_cookie, &state);
 	if (status == DMA_ERROR)
-		dev_err(&drv_data->spi_ctrl->dev, "spi rx dma error\n");
+		dev_err(&drv->spi_ctrl->dev, "spi rx dma error\n");
 	else
-		dev_info(&drv_data->spi_ctrl->dev, "dmaengine status:%d\n",status);
+		dev_info(&drv->spi_ctrl->dev, "dmaengine status:%d\n",status);
 
-	iowrite32(0, &drv_data->regs->tx_control);
-	iowrite32(0, &drv_data->regs->rx_control);
-	spi_finalize_current_transfer(drv_data->spi_ctrl);
+	iowrite32(0, &drv->regs->tx_control);
+	iowrite32(0, &drv->regs->rx_control);
+	spi_finalize_current_transfer(drv->spi_ctrl);
 }
 
 
@@ -678,26 +680,25 @@ static void adi_spi_tx_dma_isr(void *data)
  */
 static void adi_spi_slave_tx_dma_isr(void *data)
 {
-	struct adi_spi_controller *drv_data = data;
+	struct adi_spi_controller *drv = data;
 
 	struct dma_tx_state state;
 	enum dma_status status;
 
 
-	if (!spi_controller_is_slave(drv_data->spi_ctrl))
-		pr_info("[%d]master status:%08x\n",__LINE__,drv_data->regs->status);
-	else
-		pr_info("[%d]slave status:%08x\n",__LINE__,drv_data->regs->status);
+	dev_info(drv->dev,"[%d] TFIFO:%08x\n",__LINE__,ioread32(&drv->regs->tfifo));
+	iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TDR_NF , &drv->regs->tx_control);
+	pr_info("[%d]slave status:%08x\n",__LINE__,drv->regs->status);
 
-	status = dmaengine_tx_status(drv_data->spi_ctrl->dma_tx, drv_data->tx_cookie, &state);
+	status = dmaengine_tx_status(drv->spi_ctrl->dma_tx, drv->tx_cookie, &state);
 	if (status == DMA_ERROR)
-		dev_err(&drv_data->spi_ctrl->dev, "spi tx dma error\n");
+		dev_err(&drv->spi_ctrl->dev, "spi tx dma error\n");
 	else
-		dev_info(&drv_data->spi_ctrl->dev, "dmaengine status:%d\n",status);
+		dev_info(&drv->spi_ctrl->dev, "dmaengine status:%d\n",status);
 
-	iowrite32(0, &drv_data->regs->tx_control);
-	iowrite32(0, &drv_data->regs->rx_control);
-	spi_finalize_current_transfer(drv_data->spi_ctrl);
+	iowrite32(0, &drv->regs->tx_control);
+	iowrite32(0, &drv->regs->rx_control);
+	spi_finalize_current_transfer(drv->spi_ctrl);
 }
 
 /*
@@ -714,11 +715,9 @@ static void adi_spi_slave_rx_dma_isr(void *data)
 		dev_err(&drv->spi_ctrl->dev, "spi rx dma error\n");
 
 	iowrite32(0, &drv->regs->rx_control);
-	
-	if (!spi_controller_is_slave(drv->spi_ctrl))
-		pr_info("[%d]master status:%08x\n",__LINE__,drv->regs->status);
-	else
-		pr_info("[%d]slave status:%08x\n",__LINE__,drv->regs->status);
+
+	dev_info(drv->dev,"[%d] RFIFO:%08x\n",__LINE__,ioread32(&drv->regs->rfifo));
+	pr_info("[%d]slave status:%08x\n",__LINE__,drv->regs->status);
 
 	if (drv->cur_transfer->tx_buf)
 		dma_async_issue_pending(drv->spi_ctrl->dma_tx);
@@ -737,6 +736,8 @@ static int adi_spi_dma_xfer(struct spi_controller *spi_ctrl, struct spi_device *
 
 
 	if(spi_controller_is_slave(spi_ctrl)) {
+		iowrite32(SPI_TXCTL_TEN, &drv->regs->tx_control);
+		iowrite32(0 , &drv->regs->tx_control);
 		goto dma_op_rx;
 	} else {
 		dev_info(drv->dev, "spi ctrl not a slave! getting ready for duplex\n");
@@ -773,16 +774,14 @@ dma_op_tx:
 		dev_info(drv->dev,"cur_transfer_tx:%08x\n",*(uint32_t *)drv->cur_transfer->tx_buf);
 		dma_async_issue_pending(spi_ctrl->dma_tx);
 		dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
-		dev_info(drv->dev,"TFIFO:%08x\n",ioread32(&drv->regs->tfifo));
-		dma_sync_wait(tx_desc->chan, tx_desc->cookie);
+		dev_info(drv->dev,"[%d] TFIFO:%08x\n",__LINE__,ioread32(&drv->regs->tfifo));
 
-		if(spi_controller_is_slave(spi_ctrl)) {
-			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TDR_NF , &drv->regs->tx_control);
-			dma_async_issue_pending(spi_ctrl->dma_tx);
-		} else {
+		if(spi_controller_is_slave(spi_ctrl)) 
+			iowrite32(SPI_TXCTL_TEN, &drv->regs->tx_control);
+		else
 			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TTI | SPI_TXCTL_TDR_NF,
 				&drv->regs->tx_control);
-		}
+		
 
 	}
 
@@ -810,7 +809,7 @@ dma_op_rx:
 
 		drv->rx_cookie = dmaengine_submit(rx_desc);
 		
-		dev_info(drv->dev,"RFIFO:%08x\n",ioread32(&drv->regs->rfifo));
+		dev_info(drv->dev,"[%d] RFIFO:%08x\n",__LINE__,ioread32(&drv->regs->rfifo));
 		if(spi_controller_is_slave(spi_ctrl)) {
 			iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RDR_NE,
 				&drv->regs->rx_control);
@@ -828,6 +827,7 @@ dma_op_rx:
 		goto dma_op_tx;
 
 dma_op_exit:
+
 	
 	dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
 	//let callbacks trigger completion
@@ -1055,30 +1055,30 @@ static int handle_rx_overrun(struct adi_spi_controller *drv){
 
 static irqreturn_t spi_irq_err(int irq, void *dev_id)
 {
-	struct adi_spi_controller *drv_data = dev_id;
+	struct adi_spi_controller *drv = dev_id;
 	u32 status;
 
-	status = ioread32(&drv_data->regs->status);
-	dev_err(drv_data->dev, "spi error irq, status = 0x%x\n", status);
+	status = ioread32(&drv->regs->status);
+	dev_err(drv->dev, "spi error irq, status = 0x%x\n", status);
 
 	pr_info("%s:%d\n",__func__,__LINE__);
-	if (adi_spi_check_watermark_condition_tx(drv_data))
+	if (adi_spi_check_watermark_condition_tx(drv))
 		pr_info("tx watermark met!\n");
-	if (adi_spi_check_watermark_condition_rx(drv_data)) {
+	if (adi_spi_check_watermark_condition_rx(drv)) {
 		pr_info("rx watermark met!\n");
-		handle_rx_overrun(drv_data);
+		handle_rx_overrun(drv);
 		goto irq_handled;	
 	}
 
 	pr_info("%s:%d\n",__func__,__LINE__);
-	pr_info("tx ctl:%08x\nrx ctl:%08x\n",drv_data->regs->tx_control,drv_data->regs->rx_control);
+	pr_info("tx ctl:%08x\nrx ctl:%08x\n",drv->regs->tx_control,drv->regs->rx_control);
 
-	iowrite32(status, &drv_data->regs->status);
+	iowrite32(status, &drv->regs->status);
 
-	iowrite32(0, &drv_data->regs->tx_control);
-	iowrite32(0, &drv_data->regs->rx_control);
-	adi_spi_disable(drv_data);
-	adi_spi_dma_terminate(drv_data);
+	iowrite32(0, &drv->regs->tx_control);
+	iowrite32(0, &drv->regs->rx_control);
+	adi_spi_disable(drv);
+	adi_spi_dma_terminate(drv);
 
 irq_handled:
 	return IRQ_HANDLED;
@@ -1096,7 +1096,7 @@ static int adi_spi_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct spi_controller *spi_ctrl;
-	struct adi_spi_controller *drv_data;
+	struct adi_spi_controller *drv;
 	struct resource *mem, *res;
 	struct clk *sclk;
 	int ret;
@@ -1113,10 +1113,10 @@ static int adi_spi_probe(struct platform_device *pdev)
 
 	if(!slave_mode) {
 		pr_info("master mode!");
-		spi_ctrl = devm_spi_alloc_master(dev, sizeof(*drv_data));
+		spi_ctrl = devm_spi_alloc_master(dev, sizeof(*drv));
 	} else {
 		pr_info("slave mode!");
-		spi_ctrl = devm_spi_alloc_slave(dev, sizeof(*drv_data));
+		spi_ctrl = devm_spi_alloc_slave(dev, sizeof(*drv));
 	}
 
 	if (!spi_ctrl) {
@@ -1146,17 +1146,17 @@ static int adi_spi_probe(struct platform_device *pdev)
 	spi_ctrl->can_dma = adi_spi_can_dma;
 	spi_ctrl->bits_per_word_mask = BIT(32 - 1) | BIT(16 - 1) | BIT(8 - 1);
 
-	drv_data = spi_controller_get_devdata(spi_ctrl);
-	drv_data->spi_ctrl = spi_ctrl;
-	drv_data->sclk = sclk;
-	drv_data->sclk_rate = clk_get_rate(sclk);
-	drv_data->dev = dev;
+	drv = spi_controller_get_devdata(spi_ctrl);
+	drv->spi_ctrl = spi_ctrl;
+	drv->sclk = sclk;
+	drv->sclk_rate = clk_get_rate(sclk);
+	drv->dev = dev;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	drv_data->regs = devm_ioremap_resource(dev, mem);
-	if (IS_ERR(drv_data->regs)) {
+	drv->regs = devm_ioremap_resource(dev, mem);
+	if (IS_ERR(drv->regs)) {
 		dev_err(dev, "Could not map spiv3 memory, check device tree\n");
-		return PTR_ERR(drv_data->regs);
+		return PTR_ERR(drv->regs);
 	}
 
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
@@ -1165,14 +1165,14 @@ static int adi_spi_probe(struct platform_device *pdev)
 		return -ENXIO;
 	}
 	ret = devm_request_irq(dev, res->start, spi_irq_err,
-			0, "SPI ERROR", drv_data);
+			0, "SPI ERROR", drv);
 	if (ret) {
 		dev_err(dev, "can not request spi error irq\n");
 		return ret;
 	}
 	
 	if(!slave_mode)
-		iowrite32(SPI_CTL_MSTR, &drv_data->regs->control);
+		iowrite32(SPI_CTL_MSTR, &drv->regs->control);
 
 	if (slave_mode) {
 		control |= SPI_CTL_EMISO; 
@@ -1180,20 +1180,20 @@ static int adi_spi_probe(struct platform_device *pdev)
 		control |= SPI_CTL_CPHA; //toggle from start
 //		control &= ~SPI_CTL_CPHA; //toggle from middle 
 	} else {
-		delay |= SPI_DLY_LAGX;		
-		delay |= SPI_DLY_STOP; //maximum delay
+		//delay |= SPI_DLY_LAGX;		
+		//delay |= SPI_DLY_STOP; //maximum delay
 
 		control |= SPI_CTL_MSTR;
 		control |= SPI_CTL_CPHA; //toggle from start
 		control &= ~SPI_CTL_ASSEL; 
 	}
 
-	iowrite32(control, &drv_data->regs->control);
-	iowrite32(delay, &drv_data->regs->delay);
+	iowrite32(control, &drv->regs->control);
+	iowrite32(delay, &drv->regs->delay);
 	if (!slave_mode)
-		iowrite32(0x0000FE00, &drv_data->regs->ssel);
-	iowrite32(0x0, &drv_data->regs->delay);
-	iowrite32(SPI_IMSK_SET_ROM, &drv_data->regs->emaskst);
+		iowrite32(0x0000FE00, &drv->regs->ssel);
+	//iowrite32(0x0, &drv->regs->delay);
+	iowrite32(SPI_IMSK_SET_ROM, &drv->regs->emaskst);
 
 	spi_ctrl->dma_tx = dma_request_chan(dev, "tx");
 	if (!spi_ctrl->dma_tx) {
@@ -1208,7 +1208,7 @@ static int adi_spi_probe(struct platform_device *pdev)
 		goto err_free_tx_dma;
 	}
 
-	ret = clk_prepare_enable(drv_data->sclk);
+	ret = clk_prepare_enable(drv->sclk);
 	if (ret) {
 		dev_err(dev, "Could not enable SPI clock\n");
 		goto err_free_rx_dma;
@@ -1223,7 +1223,7 @@ static int adi_spi_probe(struct platform_device *pdev)
 
 
 	dev_info(dev,"probe control:%08x\n",control);
-	dev_info(dev,"control:%08x\n",drv_data->regs->control);
+	dev_info(dev,"control:%08x\n",drv->regs->control);
 	dev_info(dev, "registered ADI SPI controller\n");
 	return ret;
 
@@ -1239,10 +1239,10 @@ err_free_tx_dma:
 static int adi_spi_remove(struct platform_device *pdev)
 {
 	struct spi_controller *spi_ctrl = platform_get_drvdata(pdev);
-	struct adi_spi_controller *drv_data = spi_controller_get_devdata(spi_ctrl);
+	struct adi_spi_controller *drv = spi_controller_get_devdata(spi_ctrl);
 
-	adi_spi_disable(drv_data);
-	clk_disable_unprepare(drv_data->sclk);
+	adi_spi_disable(drv);
+	clk_disable_unprepare(drv->sclk);
 	dma_release_channel(spi_ctrl->dma_tx);
 	dma_release_channel(spi_ctrl->dma_rx);
 	return 0;
