@@ -726,116 +726,125 @@ static void adi_spi_slave_rx_dma_isr(void *data)
 }
 
 
-static int adi_spi_dma_xfer(struct spi_controller *spi_ctrl, struct spi_device *spi,
-	struct spi_transfer *xfer)
+static int adi_spi_dma_write(struct spi_controller *spi_ctrl, struct spi_transfer *xfer) 
 {
+	
 	struct adi_spi_controller *drv = spi_controller_get_devdata(spi_ctrl);
-	struct dma_async_tx_descriptor *tx_desc;
-	struct dma_async_tx_descriptor *rx_desc;
-	enum dma_status ret;
+	struct dma_async_tx_descriptor *tx_desc = dmaengine_prep_slave_sg(spi_ctrl->dma_tx, xfer->tx_sg.sgl,
+		xfer->tx_sg.nents, DMA_MEM_TO_DEV, 0);
+	
+	if (!xfer->tx_buf) 
+		return 0;
 
-
-	if(spi_controller_is_slave(spi_ctrl)) {
-		iowrite32(SPI_TXCTL_TEN, &drv->regs->tx_control);
-		iowrite32(0 , &drv->regs->tx_control);
-		goto dma_op_rx;
-	} else {
-		dev_info(drv->dev, "spi ctrl not a slave! getting ready for duplex\n");
+	if (!tx_desc) {
+		dev_err(drv->dev, "Unable to allocate TX DMA descriptor\n");
+		return -1;
 	}
 
-dma_op_tx:
-
-	if (xfer->tx_buf) {
-		tx_desc = dmaengine_prep_slave_sg(spi_ctrl->dma_tx, xfer->tx_sg.sgl,
-			xfer->tx_sg.nents, DMA_MEM_TO_DEV, 0);
-		if (!tx_desc) {
-			dev_err(drv->dev, "Unable to allocate TX DMA descriptor\n");
-			goto error;
-		}
-
-		// transmission callback disabled in case rx also needs to be done
-		// since spi_finalize_current_transfer can only be called once
-		//
-		// but this is not the case for a spi-sub device (its inversed)
-		if (!spi_controller_is_slave(spi_ctrl)) {
-			if ((!xfer->rx_buf)) {
-				tx_desc->callback = adi_spi_tx_dma_isr;
-				tx_desc->callback_param = drv;
-			}
-
-		} else {
-			tx_desc->callback = adi_spi_slave_tx_dma_isr;
+	// transmission callback disabled in case rx also needs to be done
+	// since spi_finalize_current_transfer can only be called once
+	//
+	// but this is not the case for a spi-sub device (its inversed)
+	if (!spi_controller_is_slave(spi_ctrl)) {
+		if ((!xfer->rx_buf)) {
+			tx_desc->callback = adi_spi_tx_dma_isr;
 			tx_desc->callback_param = drv;
 		}
 
-		drv->tx_cookie = dmaengine_submit(tx_desc);
-		
-		dev_info(drv->dev,"flushing final tx transaction\n");
-		dev_info(drv->dev,"cur_transfer_tx:%08x\n",*(uint32_t *)drv->cur_transfer->tx_buf);
-		dma_async_issue_pending(spi_ctrl->dma_tx);
-		dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
-		dev_info(drv->dev,"[%d] TFIFO:%08x\n",__LINE__,ioread32(&drv->regs->tfifo));
-
-		if(spi_controller_is_slave(spi_ctrl)) 
-			iowrite32(SPI_TXCTL_TEN, &drv->regs->tx_control);
-		else
-			iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TTI | SPI_TXCTL_TDR_NF,
-				&drv->regs->tx_control);
-		
-
+	} else {
+		tx_desc->callback = adi_spi_slave_tx_dma_isr;
+		tx_desc->callback_param = drv;
 	}
 
-	if(spi_controller_is_slave(spi_ctrl))
-		goto dma_op_exit;
-
-dma_op_rx:
-
-	if (xfer->rx_buf) {
-		rx_desc = dmaengine_prep_slave_sg(spi_ctrl->dma_rx, xfer->rx_sg.sgl,
-			xfer->rx_sg.nents, DMA_DEV_TO_MEM, 0);
-		dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
-		if (!rx_desc) {
-			dev_err(drv->dev, "Unable to allocate RX DMA descriptor\n");
-			goto error;
-		}
-
-		if (!spi_controller_is_slave(spi_ctrl)) {
-			rx_desc->callback = adi_spi_rx_dma_isr;
-			rx_desc->callback_param = drv;
-		} else if (!xfer->tx_buf) {
-			rx_desc->callback = adi_spi_slave_rx_dma_isr;
-			rx_desc->callback_param = drv;
-		}
-
-		drv->rx_cookie = dmaengine_submit(rx_desc);
-		
-		dev_info(drv->dev,"[%d] RFIFO:%08x\n",__LINE__,ioread32(&drv->regs->rfifo));
-		if(spi_controller_is_slave(spi_ctrl)) {
-			iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RDR_NE,
-				&drv->regs->rx_control);
-		} else {
-			iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RTI | SPI_RXCTL_RDR_NE,
-				&drv->regs->rx_control);
-		}
-		
-		dev_info(drv->dev,"flushing final rx transaction\n");
-		dev_info(drv->dev,"cur_transfer_rx:%08x\n",*(uint32_t *)drv->cur_transfer->rx_buf);
-		dma_async_issue_pending(spi_ctrl->dma_rx);
-	}
-
-	if(spi_controller_is_slave(spi_ctrl))
-		goto dma_op_tx;
-
-dma_op_exit:
-
+	drv->tx_cookie = dmaengine_submit(tx_desc);
 	
+	dev_info(drv->dev,"flushing final tx transaction\n");
+	dev_info(drv->dev,"cur_transfer_tx:%08x\n",*(uint32_t *)drv->cur_transfer->tx_buf);
+	dma_async_issue_pending(spi_ctrl->dma_tx);
+	dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
+	dev_info(drv->dev,"[%d] TFIFO:%08x\n",__LINE__,ioread32(&drv->regs->tfifo));
+
+	if(spi_controller_is_slave(spi_ctrl)) 
+		iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TDR_EMPTY , &drv->regs->tx_control);
+	else
+		iowrite32(SPI_TXCTL_TEN | SPI_TXCTL_TTI | SPI_TXCTL_TDR_NF | SPI_TXCTL_TWCEN,
+			&drv->regs->tx_control);
+		
+	return 0;
+}
+
+
+static int adi_spi_dma_read(struct spi_controller *spi_ctrl, struct spi_transfer *xfer) 
+{
+	
+	struct adi_spi_controller *drv = spi_controller_get_devdata(spi_ctrl);
+	struct dma_async_tx_descriptor *rx_desc = dmaengine_prep_slave_sg(spi_ctrl->dma_rx, xfer->rx_sg.sgl,
+		xfer->rx_sg.nents, DMA_DEV_TO_MEM, 0);
+	
+	if (!xfer->rx_buf)
+		return 0;
+
+	dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
+	if (!rx_desc) {
+		dev_err(drv->dev, "Unable to allocate RX DMA descriptor\n");
+		return -1;
+	}
+
+	if (!spi_controller_is_slave(spi_ctrl)) {
+		rx_desc->callback = adi_spi_rx_dma_isr;
+		rx_desc->callback_param = drv;
+	} else if (!xfer->tx_buf) {
+		rx_desc->callback = adi_spi_slave_rx_dma_isr;
+		rx_desc->callback_param = drv;
+	}
+
+	drv->rx_cookie = dmaengine_submit(rx_desc);
+	
+	dev_info(drv->dev,"[%d] RFIFO:%08x\n",__LINE__,ioread32(&drv->regs->rfifo));
+	if(spi_controller_is_slave(spi_ctrl)) {
+		iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RDR_NE | SPI_RXCTL_RDR_DIS,
+			&drv->regs->rx_control);
+	} else {
+		iowrite32(SPI_RXCTL_REN | SPI_RXCTL_RTI | SPI_RXCTL_RDR_NE | SPI_RXCTL_RWCEN | SPI_RXCTL_RDR_DIS,
+			&drv->regs->rx_control);
+	}
+	
+	dev_info(drv->dev,"flushing final rx transaction\n");
+	dev_info(drv->dev,"cur_transfer_rx:%08x\n",*(uint32_t *)drv->cur_transfer->rx_buf);
+	dma_async_issue_pending(spi_ctrl->dma_rx);
+	return 0;
+} 
+
+static int adi_spi_error_check(struct spi_controller *spi_ctrl, int ret)
+{
+	struct adi_spi_controller *drv = spi_controller_get_devdata(spi_ctrl);
+	
+	if(!ret)
+		return ret;
+
+	adi_spi_dma_terminate(drv);
+	return -ENOENT;
+}
+
+static int adi_spi_dma_xfer(struct spi_controller *spi_ctrl, struct spi_device *spi,
+	struct spi_transfer *xfer)
+{
+	
+	struct adi_spi_controller *drv = spi_controller_get_devdata(spi_ctrl);
+	
+	if(spi_controller_is_slave(spi_ctrl)) {
+		adi_spi_error_check(spi_ctrl, adi_spi_dma_read(spi_ctrl, xfer));
+		adi_spi_error_check(spi_ctrl, adi_spi_dma_write(spi_ctrl, xfer));
+			
+	} else {
+		dev_info(drv->dev, "spi ctrl not a slave! getting ready for duplex\n");
+		adi_spi_error_check(spi_ctrl, adi_spi_dma_write(spi_ctrl, xfer));
+		adi_spi_error_check(spi_ctrl, adi_spi_dma_read(spi_ctrl, xfer));
+	}
+
 	dev_info(drv->dev,"[%d] status:%08x\n",__LINE__,drv->regs->status);
 	//let callbacks trigger completion
 	return 1;
-
-error:
-	adi_spi_dma_terminate(drv);
-	return -ENOENT;
 }
 
 static bool adi_spi_can_dma(struct spi_controller *spi_ctrl, struct spi_device *spi,
