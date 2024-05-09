@@ -21,15 +21,15 @@
 
 	chosen {
 		stdout-path = &uart1;
-		bootargs = "root=/dev/mtdblock4 rw rootfstype=jffs2 earlyprintk=serial,uart0,115200 console=ttySC0,115200 vmalloc=512M";
+		bootargs = "root=/dev/mtdblock4 rw rootfstype=jffs2 earlyprintk=serial,uart0,115200 console=ttySC0,115200 vmalloc=512M mem=512M";
 	};
 
 	aliases {
 	};
 
-	memory@a0000000 { /*4 Gbit DDR*/
+	memory@80000000 { /*4 Gbit DDR*/
 		device_type = "memory";
-		reg = <0xa0000000 0x20000000>;
+		reg = <0xa0000000 0x20000000>; 
 	};
 
 	reserved-memory {
