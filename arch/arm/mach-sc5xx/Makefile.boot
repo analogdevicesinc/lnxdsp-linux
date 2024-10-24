@@ -19,6 +19,6 @@ params_phys-y	:= 0xC2000100
 endif
 
 ifeq ($(CONFIG_MACH_SC594_SOM_EZKIT),y)
-zreladdr-y      += 0x82008000
-params_phys-y   := 0x82000100
+zreladdr-y      += 0xA0008000
+params_phys-y   := 0xA0000100
 endif
