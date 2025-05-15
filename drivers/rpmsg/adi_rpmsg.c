@@ -80,6 +80,8 @@ struct adi_rpmsg_channel {
 	struct fw_rsc_vdev_vring *rsc_vring[2];
 };
 
+static uint8_t rpmsg_status[2];
+
 static u64 adi_rpmsg_get_features(struct virtio_device *vdev)
 {
 	/* 1<<0 is VIRTIO_RPMSG_F_NS bit defined in virtio_rpmsg_bus.c */
@@ -97,6 +99,7 @@ static bool adi_rpmsg_notify(struct virtqueue *vq)
 	struct adi_rpmsg_vring *vring = vq->priv;
 	struct adi_rpmsg_channel *rpchan = vring->rpchan;
 	int wait_time, step;
+
 
 	/* Delay a little the first notify and check if remote core has done its initialization */
 	if (rpchan->rpmsg_state == ADI_RP_RPMSG_WAITING) {
@@ -231,7 +234,11 @@ static u8 adi_virtio_get_status(struct virtio_device *vdev)
 	struct adi_rpmsg_channel *rpchan = container_of(vdev, struct adi_rpmsg_channel, vdev);
 	struct fw_rsc_vdev *rsc_vdev = rpchan->rsc_vdev;
 
-	return rsc_vdev->status;
+#ifdef CONFIG_ADI_REMOTEPROC
+	return rpmsg_status[rpchan->core_id];
+#else
+ 	return rsc_vdev->status;
+#endif
 }
 
 static void adi_virtio_set_status(struct virtio_device *vdev, u8 status)
@@ -239,7 +246,11 @@ static void adi_virtio_set_status(struct virtio_device *vdev, u8 status)
 	struct adi_rpmsg_channel *rpchan = container_of(vdev, struct adi_rpmsg_channel, vdev);
 	struct fw_rsc_vdev *rsc_vdev = rpchan->rsc_vdev;
 
-	rsc_vdev->status = status;
+#ifdef CONFIG_ADI_REMOTEPROC
+	rpmsg_status[rpchan->core_id] = status;
+#else
+ 	rsc_vdev->status = status;
+#endif
 }
 
 static void adi_virtio_reset(struct virtio_device *vdev)
@@ -518,6 +529,16 @@ static int adi_rpmsg_probe(struct platform_device *pdev)
 	rpchan->vdev.config = &adi_rpmsg_config_ops;
 	rpchan->vdev.dev.parent = &rpchan->pdev->dev;
 	rpchan->vdev.dev.release = adi_rpmsg_vproc_release;
+
+#ifdef CONFIG_ADI_REMOTEPROC
+	while (VIRTIO_CONFIG_S_DRIVER_OK != rpchan->rsc_vdev->status) {
+		pr_notice("Waiting for status change\n");
+		msleep(100);
+	}
+
+	rpmsg_status[0] = 0;
+	rpmsg_status[1] = 0;
+#endif
 
 	ret = register_virtio_device(&rpchan->vdev);
 	if (ret) {
